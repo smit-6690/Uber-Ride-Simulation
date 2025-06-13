@@ -1,0 +1,73 @@
+version: '3.9'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.2.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2281:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.2.1
+    ports:
+      - "29092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  rides-service:
+    build: ./services/rides
+    ports:
+      - "4001:4001"
+    env_file:
+      - ./services/rides/.env
+
+  drivers-service:
+    build: ./services/drivers
+    ports:
+      - "4002:4002"
+    env_file:
+      - ./services/drivers/.env
+
+  customers-service:
+    build: ./services/customers
+    ports:
+      - "4003:4003"
+    env_file:
+      - ./services/customers/.env
+
+  billing-service:
+    build: ./services/billing
+    ports:
+      - "4004:4004"
+    env_file:
+      - ./services/billing/.env
+
+  admin-service:
+    build: ./services/admin
+    ports:
+      - "4005:4005"
+    env_file:
+      - ./services/admin/.env
+
+  ml-service:
+    build: ./services/dynamic_pricing_model
+    ports:
+      - "8000:8000"
+
+  frontend-service:
+    build: ./uber-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - rides-service
+      - drivers-service
+      - customers-service
+      - billing-service
+      - admin-service
+      - ml-service
