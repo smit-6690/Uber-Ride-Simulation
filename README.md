@@ -1,28 +1,41 @@
-# 🚖 Uber Ride-Sharing Simulation – Distributed Microservices Architecture
+# 🚗 Uber Ride Simulation – Distributed Systems Class Project
 
-A production-inspired, scalable simulation of the Uber ride-sharing platform.
-This project was developed as part of the **Distributed Systems for Data Engineering** course to demonstrate robust microservices design using modern, industry-relevant technologies like **Kafka, Docker, MySQL, MongoDB, Redis, and Machine Learning**.
+## 📌 Overview
+
+This project simulates a real-world Uber-like system using a **3-tier distributed architecture**. It implements functionalities such as ride matching, billing, customer and driver management, and dynamic pricing based on real-time demand and historical data.
+
+Developed as part of **San Jose State University's Distributed Systems for Data Engineering** course, the project focuses on system scalability, fault tolerance, distributed services, and efficient database design.
+
+---
+
+## 🛠 Tech Stack
+
+**Backend & Middleware:**  
+`Node.js` · `Express.js` · `REST APIs` · `Kafka` (messaging queue)
+
+**Client Tier:**  
+`Node.js GUI` (local app interface)
+
+**Databases:**  
+`MySQL` · `MongoDB` · `Redis` (SQL Caching for performance)
+
+**DevOps & Infra:**  
+`Docker` · `Kubernetes` (AWS) · `Apache JMeter` (load testing)
+
+**Data & Algorithms:**  
+`JSON` · `Dynamic Pricing Algorithm` · `Machine Learning`  
+`Kaggle Dataset: [Uber Fares Dataset](https://www.kaggle.com/datasets/yasserh/uber-fares-dataset)`
 
 ---
 
-## 🏗️ System Architecture
+## 🧩 System Architecture
 
-```
-Frontend (React / Node.js)
-        ↓
-REST APIs (Express Microservices)
-        ↓
-Kafka Broker ↔ Redis Cache
-        ↓
-MySQL + MongoDB
-```
+```text
+ ┌────────────┐     REST API      ┌──────────────┐     DB Access     ┌────────────┐
+ │  Client UI │ ───────────────▶ │  Middleware  │ ───────────────▶ │  Database  │
+ │  (Node.js) │   Kafka Events    │  (Express.js)│     Redis Cache   │  (MySQL,   │
+ └────────────┘ ◀─────────────── └──────────────┘ ◀─────────────── │  MongoDB)  │
 
-* **Microservices** for Customer, Driver, Billing, Rides, and Admin
-* Services communicate asynchronously via **Kafka** broker
-* Dockerized containers ensure portability and scalability
-* Frontend communicates via **REST APIs** with backend services
-
----
 
 ## 🚀 Key Features
 
@@ -36,18 +49,6 @@ MySQL + MongoDB
 
 ---
 
-## 🔧 Tech Stack Overview
-
-| Layer         | Technologies                                   |
-| ------------- | ---------------------------------------------- |
-| **Frontend**  | React.js, Node.js                              |
-| **Backend**   | Express.js, REST APIs, Kafka                   |
-| **Databases** | MySQL (structured data), MongoDB (media)       |
-| **Caching**   | Redis                                          |
-| **ML Engine** | Python, Scikit-learn                           |
-| **DevOps**    | Docker, Docker Compose, JMeter, GitHub Actions |
-
----
 
 ## ⚙️ Quick Start (Dockerized Setup)
 
