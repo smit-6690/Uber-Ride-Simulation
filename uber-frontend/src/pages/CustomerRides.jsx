@@ -57,7 +57,7 @@ const CustomerRides = () => {
     if (window.confirm('Are you sure you want to cancel this ride?')) {
       dispatch(updateRideStatus({ rideId, data: { status: 'cancelled' } }))
         .then(() => dispatch(fetchRidesByCustomer(id)))
-        .catch(err => alert('Failed to cancel ride'));
+        .catch(() => alert('Failed to cancel ride'));
     }
   };
 
@@ -84,7 +84,7 @@ const CustomerRides = () => {
       if (result.message) alert(result.message);
       setShowModal(false);
       dispatch(fetchRidesByCustomer(id));
-    } catch (err) {
+    } catch {
       alert('Failed to update ride');
     }
   };

@@ -2,6 +2,7 @@ const axios = require('axios');
 const Ride = require('../models/ride');
 const { client } = require('../redisClient'); // ✅ Redis client
 const { sendRideCompletedEvent } = require('../kafkaProducer');
+const { syncRideToMySQL, syncRideStatusToMySQL } = require('../mysqlClient');
 
 // Haversine distance (km)
 function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -36,41 +37,18 @@ exports.createRide = async (req, res) => {
         const is_weekend = (day_of_week === 0 || day_of_week === 6) ? 1 : 0;
         const is_night = (hour >= 21 || hour < 6) ? 1 : 0;
 
-        // Updated driver service URL
-        const driverResponse = await axios.get('http://drivers-service:4002/api/drivers');
-        const drivers = driverResponse.data || [];
-
-        let nearestDriver = null;
-        let minDistance = Infinity;
-
-        for (const driver of drivers) {
-            const activeRides = await Ride.find({
-                driverId: driver.driverId,
-                status: { $in: ['accepted', 'in-progress'] }
-            });
-
-            if (activeRides.length > 0) continue;
-
-            const loc = driver.currentLocation;
-            if (loc?.latitude && loc?.longitude) {
-                const dist = haversineDistance(
-                    pickupLocation.latitude,
-                    pickupLocation.longitude,
-                    loc.latitude,
-                    loc.longitude
-                );
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    nearestDriver = driver;
-                }
+        // Driver selection is owned by the Go real-time matching service.
+        const matchingServiceUrl = process.env.MATCHING_SERVICE_URL || 'http://matching-service:4010';
+        const matchingResponse = await axios.post(`${matchingServiceUrl}/api/v1/match`, {
+            pickup: {
+                latitude: pickupLocation.latitude,
+                longitude: pickupLocation.longitude
             }
-        }
-
-        if (!nearestDriver) {
+        });
+        const driverId = matchingResponse.data?.driverId;
+        if (!driverId) {
             return res.status(400).json({ message: 'No available drivers nearby' });
         }
-
-        const driverId = nearestDriver.driverId;
 
         const estimatedDistance = haversineDistance(
             pickupLocation.latitude,
@@ -82,7 +60,8 @@ exports.createRide = async (req, res) => {
         let estimatedPrice = 0;
 
         try {
-            const mlResponse = await axios.post("http://ml-service:8000/predict", {
+            const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://ml-service:8000';
+            const mlResponse = await axios.post(`${mlServiceUrl}/predict`, {
                 distance_km: estimatedDistance,
                 passenger_count,
                 hour,
@@ -112,6 +91,7 @@ exports.createRide = async (req, res) => {
         });
 
         await ride.save();
+        await syncRideToMySQL(ride);
         await client.del(`ridesByDriver:${driverId}`);
 
         res.status(201).json({ message: "Ride created", ride });
@@ -254,7 +234,8 @@ exports.updateRide = async (req, res) => {
             };
 
             try {
-                const response = await axios.post("http://ml-service:8000/predict", features);
+                const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://ml-service:8000';
+                const response = await axios.post(`${mlServiceUrl}/predict`, features);
                 ride.estimatedPrice = response.data.estimated_price;
             } catch (err) {
                 console.error("❌ ML model error:", err.message);
@@ -275,6 +256,7 @@ exports.updateRide = async (req, res) => {
         }
 
         await ride.save();
+        await syncRideToMySQL(ride);
         await client.del(`ridesByDriver:${ride.driverId}`);
 
         res.json({ ride, message });
@@ -288,6 +270,8 @@ exports.deleteRide = async (req, res) => {
     try {
         const ride = await Ride.findOneAndDelete({ rideId: req.params.id });
         if (!ride) return res.status(404).json({ message: 'Ride not found' });
+
+        await syncRideStatusToMySQL(ride);
 
         await client.del(`ridesByDriver:${ride.driverId}`);
         res.json({ message: 'Ride deleted successfully' });

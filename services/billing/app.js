@@ -13,6 +13,12 @@ connectRedis();
 const { startKafkaConsumer } = require('./kafkaConsumer');
 startKafkaConsumer();
 
+const { checkMySQLConnection } = require('./mysqlClient');
+checkMySQLConnection().catch(err => {
+    console.error('Failed to connect to MySQL:', err.message);
+    if (process.env.MYSQL_REQUIRED === 'true') process.exit(1);
+});
+
 
 app.use(express.json());
 app.use(cors());

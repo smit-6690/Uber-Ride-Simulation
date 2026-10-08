@@ -1,9 +1,10 @@
 const { Kafka } = require('kafkajs');
 const Billing = require('./models/billing');
+const { syncBillingToMySQL } = require('./mysqlClient');
 
 const kafka = new Kafka({
   clientId: 'billing-service',
-  brokers: ['kafka:9092']
+  brokers: (process.env.KAFKA_BROKERS || 'kafka:9092').split(',')
 });
 
 const consumer = kafka.consumer({ groupId: 'billing-consumer-group' });
@@ -27,6 +28,7 @@ async function startKafkaConsumer() {
       }
 
       const billing = new Billing({
+        rideId: rideData.rideId,
         billingId: `BILL-${Date.now()}`,
         date: new Date(),
         pickupTime: rideData.dateTime,
@@ -44,6 +46,7 @@ async function startKafkaConsumer() {
       });
 
       await billing.save();
+      await syncBillingToMySQL(billing, rideData);
       console.log(`✅ Bill created via Kafka for rideId ${rideData.rideId}`);
     }
   });

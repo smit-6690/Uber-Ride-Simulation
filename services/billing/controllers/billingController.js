@@ -1,5 +1,6 @@
 const Billing = require('../models/billing');
 const { client } = require('../redisClient'); // ✅ Redis client
+const { syncBillingToMySQL, syncBillingStatusToMySQL } = require('../mysqlClient');
 
 // Generate Bill
 exports.generateBill = async (req, res) => {
@@ -13,6 +14,7 @@ exports.generateBill = async (req, res) => {
         }
 
         const billing = new Billing({
+            rideId,
             billingId: `BILL-${Date.now()}`,
             date: new Date(),
             pickupTime: rideData.dateTime,
@@ -30,6 +32,7 @@ exports.generateBill = async (req, res) => {
         });
 
         await billing.save();
+        await syncBillingToMySQL(billing, { rideId });
         // ❌ Invalidate customer bill cache
         await client.del(`customerBills:${billing.customerId}`);
 
@@ -54,6 +57,8 @@ exports.getBillById = async (req, res) => {
     try {
         const bill = await Billing.findOne({ billingId: req.params.id });
         if (!bill) return res.status(404).json({ message: 'Bill not found' });
+
+        await syncBillingStatusToMySQL(bill);
         res.json(bill);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -184,5 +189,4 @@ exports.searchBills = async (req, res) => {
         });
     }
 };
-
 

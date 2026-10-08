@@ -1,127 +1,158 @@
-# 🚗 Uber Ride Simulation – Distributed Systems Class Project
+# Uber Ride Simulation
 
-## 📌 Overview
+A Dockerized distributed ride-hailing platform built with Go, Python, Kafka, Redis, MySQL, MongoDB, REST APIs, and machine-learning pricing.
 
-This project simulates a real-world Uber-like system using a **3-tier distributed architecture**. It implements functionalities such as ride matching, billing, customer and driver management, and dynamic pricing based on real-time demand and historical data.
+## Architecture
 
-Developed as part of **San Jose State University's Distributed Systems for Data Engineering** course, the project focuses on system scalability, fault tolerance, distributed services, and efficient database design.
+| Component | Responsibility | Technology |
+|---|---|---|
+| `matching-service` | Geospatial nearest-driver matching and atomic reservation | Go, Redis |
+| `rides-service` | Ride lifecycle, REST APIs, cache invalidation, event publishing | Node.js, Express, MongoDB, MySQL, Kafka |
+| `drivers-service` | Driver profiles and location queries | Node.js, Express, MongoDB, Redis |
+| `customers-service` | Customer profiles and ride actions | Node.js, Express, MongoDB |
+| `billing-service` | Kafka ride-completed consumer and billing records | Node.js, Express, Kafka, MongoDB, MySQL |
+| `ml-service` | Fare estimation | Python, FastAPI, XGBoost/joblib |
+| `frontend-service` | Web client | React, Vite, Nginx |
 
----
+MongoDB remains the document store for customer, driver, ride, and billing documents. MySQL stores normalized transactional ride and billing records. Redis handles driver reservations and hot-query caching. Kafka decouples ride completion from billing.
 
-## 🛠 Tech Stack
+## Run the complete project
 
-**Backend & Middleware:**  
-`Node.js` · `Express.js` · `REST APIs` · `Kafka` (messaging queue)
+Prerequisites: Docker Desktop, Go 1.22+, Node.js 18+, and optionally k6 for load testing.
 
-**Client Tier:**  
-`Node.js GUI` (local app interface)
+```bash
+docker compose config
+docker compose up -d --build
+docker compose ps
+```
 
-**Databases:**  
-`MySQL` · `MongoDB` · `Redis` (SQL Caching for performance)
-
-**DevOps & Infra:**  
-`Docker` · `Kubernetes` (AWS) · `Apache JMeter` (load testing)
-
-**Data & Algorithms:**  
-`JSON` · `Dynamic Pricing Algorithm` · `Machine Learning`  
-`Kaggle Dataset: [Uber Fares Dataset](https://www.kaggle.com/datasets/yasserh/uber-fares-dataset)`
-
----
-
-## 🧩 System Architecture
+The first startup downloads images and builds the services. A fresh MongoDB volume is seeded with one development driver:
 
 ```text
- ┌────────────┐     REST API      ┌──────────────┐     DB Access     ┌────────────┐
- │  Client UI │ ───────────────▶ │  Middleware  │ ───────────────▶ │  Database  │
- │  (Node.js) │   Kafka Events    │  (Express.js)│     Redis Cache   │  (MySQL,   │
- └────────────┘ ◀─────────────── └──────────────┘ ◀─────────────── │  MongoDB)  │
-
-
-## 🚀 Key Features
-
-* 🔁 **Microservices Architecture**: Independent modules for core Uber functionalities
-* 📦 **Kafka Messaging Queue**: Enables event-driven, decoupled communication
-* 🧠 **Dynamic Pricing Engine**: Real-time pricing based on traffic/load via ML model (Scikit-learn)
-* ⚡ **Redis Caching**: Speeds up frequent read operations, reduces DB load
-* 📍 **Geo-based Driver Matching**: Real-time location matching for rider-driver allocation
-* 📷 **Media Upload Support**: Handles user and driver media (images/videos) via MongoDB GridFS
-* 📊 **Admin Dashboard**: Live statistics, ride analytics, revenue tracking
-
----
-
-
-## ⚙️ Quick Start (Dockerized Setup)
-
-### 1. Clone the Repository:
-
-```bash
-git clone https://github.com/<your-username>/Uber_Rides.git
-cd Uber_Rides
+driverId: 123-45-6789
+customerId for test rides: 987-65-4321
 ```
 
-### 2. Build & Start All Microservices:
+Basic health checks:
 
 ```bash
-docker-compose up --build -d
+curl http://localhost:4010/health
+curl http://localhost:8000/docs
+curl http://localhost:4002/api/drivers
 ```
 
-### 3. Verify Services:
+The frontend is available at `http://localhost:5173`. Mapbox is optional: without `VITE_MAPBOX_TOKEN`, the booking screen accepts `latitude, longitude` values directly, which is useful for local backend verification. Copy `uber-frontend/.env.example` if you want address search and the interactive map.
+
+### Local service URLs
+
+| Service | URL |
+|---|---|
+| Web application | `http://localhost:5173` |
+| Rides API | `http://localhost:4001` |
+| Drivers API | `http://localhost:4002` |
+| Customers API | `http://localhost:4003` |
+| Billing API | `http://localhost:4004` |
+| Admin API | `http://localhost:4005` |
+| Matching API | `http://localhost:4010` |
+| Pricing API | `http://localhost:8000/docs` |
+
+### Complete ride flow
+
+The fresh local database includes a development driver with ID `123-45-6789`. Create a ride using the seeded customer ID, then inspect the resulting records:
 
 ```bash
-docker-compose logs -f
+curl -X POST http://localhost:4001/api/rides \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "pickupLocation": {
+      "latitude": 37.7749,
+      "longitude": -122.4194,
+      "address": "Market Street, San Francisco"
+    },
+    "dropoffLocation": {
+      "latitude": 37.7849,
+      "longitude": -122.4094,
+      "address": "Union Square, San Francisco"
+    },
+    "dateTime": "2026-10-07T18:00:00.000Z",
+    "customerId": "987-65-4321",
+    "passenger_count": 1
+  }'
 ```
 
-### 4. Start Frontend Locally:
+If the ride endpoint returns `404`, verify the route exposed by the running rides service and inspect its logs with `docker compose logs rides-service`. A new MongoDB volume runs the seed script automatically; an existing volume does not rerun initialization scripts.
+
+## Verify MySQL synchronization
+
+The schema is in `infra/mysql/init/001_schema.sql`. For an existing MySQL volume, apply it manually if needed:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+docker compose exec -T mysql mysql -uuber_app -puber_password uber_simulation \
+  < infra/mysql/init/001_schema.sql
 ```
 
-> ✅ **Ensure Docker Desktop is running before starting services.**
+Inspect relational data after creating or completing a ride:
 
----
+```bash
+docker compose exec mysql mysql -uuber_app -puber_password uber_simulation \
+  -e "SELECT ride_id, status, estimated_price, actual_price FROM rides ORDER BY created_at DESC LIMIT 5;"
 
-## 📈 Performance & Scalability Testing
+docker compose exec mysql mysql -uuber_app -puber_password uber_simulation \
+  -e "SELECT billing_id, ride_id, amount, payment_status FROM billing_records ORDER BY created_at DESC LIMIT 5;"
+```
 
-Conducted load testing using **Apache JMeter** under multiple configurations:
+Detailed integration notes are in [`docs/mysql-integration.md`](docs/mysql-integration.md).
 
-| Setup                   | Throughput | Latency  |
-| ----------------------- | ---------- | -------- |
-| Base (No Caching/Kafka) | Moderate   | Moderate |
-| + SQL Caching (Redis)   | High       | Low      |
-| + Kafka Messaging       | Higher     | Lower    |
-| + Full Optimization     | Highest    | Lowest   |
+## Validate the Go matcher
 
----
+```bash
+cd services/matching-go
+go mod tidy
+go test ./...
+go build .
+cd ../..
+```
 
-## 🖼️ UI Snapshots
+The matcher exposes:
 
-### 🚘 Main Uber Hero Section
+- `GET /health`
+- `POST /api/v1/match`
+- `GET /metrics`
 
-![Uber Hero](https://github.com/user-attachments/assets/5121c425-3aed-4947-bcac-191fd41ee860)
+Redis reservations use `SETNX` with a configurable TTL, so concurrent requests cannot reserve the same driver successfully.
 
-### 🙌 Why Choose Us Section
+## Configuration
 
-![Why Choose Us](https://github.com/user-attachments/assets/b1cc3c4e-d4be-4707-bcaf-46e46fe97c60)
+Each Node.js service provides an `.env.example` file with local defaults. The matching service accepts `MATCHING_PORT`, `REDIS_ADDR`, `DRIVER_SERVICE_URL`, and `RESERVATION_TTL_SECONDS`. The frontend accepts optional `VITE_MAPBOX_TOKEN` and `VITE_GOOGLE_MAPS_API_KEY` values. Do not commit real credentials or production secrets.
 
----
+## Benchmark the matching service
 
-## ✅ Final Notes
+Start the matcher and Redis first, then run:
 
-This project demonstrates:
+```bash
+RUN_ID=$(date +%s) k6 run \
+  --out json=matching-results-$(date +%s).json \
+  -e VUS=1000 \
+  -e DURATION=30s \
+  benchmarks/k6/matching.js
+```
 
-* **Asynchronous, event-driven design**
-* **Dynamic, ML-powered decision making**
-* **Scalability via Dockerized Microservices**
-* **Real-world cloud architecture principles**
+The script requires successful HTTP 200 responses and enforces `p(99)<200ms` and an error rate below 1%. The benchmark is a local synthetic matcher workload, not an end-to-end AWS or full ride-lifecycle measurement. Store the generated JSON output with the test configuration and environment details for reproducibility.
 
-> ⭐ **Feel free to fork, star, or contribute if you find this project useful or inspiring!**
+## Useful commands
 
----
+```bash
+make test
+make build
+make up
+make logs
+make mysql-check
+make down
+```
 
-## 👨‍💻 Author
+## Project documentation
 
-**Smit Ardeshana**
-[LinkedIn](https://linkedin.com/in/smit-ardeshana-956512220) • [GitHub](https://github.com/smit-6690)
+- [`docs/local-development.md`](docs/local-development.md)
+- [`docs/mysql-integration.md`](docs/mysql-integration.md)
+- [`services/matching-go/README.md`](services/matching-go/README.md)
+- [`benchmarks/README.md`](benchmarks/README.md)

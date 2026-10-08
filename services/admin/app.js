@@ -17,7 +17,7 @@ console.log("🔍 Using Mongo URI:", process.env.MONGO_URI);
 
 // Redis client
 const redisClient = redis.createClient({
-  url: 'redis://localhost:6379'
+  url: process.env.REDIS_URL || 'redis://redis:6379'
 });
 
 redisClient.on('error', (err) => {

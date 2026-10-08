@@ -27,7 +27,8 @@ const rideSlice = createSlice({
         state.customerRides = action.payload;
       })
       .addCase(bookRide.fulfilled, (state, action) => {
-        state.customerRides.push(action.payload);
+        const ride = action.payload?.ride || action.payload;
+        if (ride) state.customerRides.push(ride);
       })
       .addCase(updateRide.fulfilled, (state, action) => {
         const index = state.driverRides.findIndex(r => r._id === action.payload._id);

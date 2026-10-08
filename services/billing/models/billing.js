@@ -9,6 +9,11 @@ const locationSchema = new mongoose.Schema({
 
 // Main Billing Schema
 const billingSchema = new mongoose.Schema({
+    rideId: {
+        type: String,
+        required: true,
+        index: true
+    },
     billingId: {
         type: String,
         required: true,
@@ -72,4 +77,4 @@ billingSchema.pre('save', function(next) {
 
 const Billing = mongoose.model('Billing', billingSchema);
 
-module.exports = Billing; 
+module.exports = Billing;

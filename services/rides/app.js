@@ -30,6 +30,12 @@ connectRedis().catch(err => {
   process.exit(1);
 });
 
+const { checkMySQLConnection } = require('./mysqlClient');
+checkMySQLConnection().catch(err => {
+  console.error('Failed to connect to MySQL:', err.message);
+  if (process.env.MYSQL_REQUIRED === 'true') process.exit(1);
+});
+
 app.use(express.json());
 
 // Routes
@@ -48,5 +54,4 @@ const PORT = process.env.PORT || 4001;
 app.listen(PORT, () => {
   console.log(`🚗 Rides Service running on port ${PORT}`);
 });
-
 

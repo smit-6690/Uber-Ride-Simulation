@@ -13,6 +13,9 @@ logs
 # Environment files
 .env
 .env.*
+!.env.example
+!services/*/.env.example
+!uber-frontend/.env.example
 
 # OS-specific
 .DS_Store

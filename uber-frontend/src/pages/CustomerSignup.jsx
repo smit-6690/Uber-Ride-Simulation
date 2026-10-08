@@ -78,11 +78,9 @@ const CustomerSignup = () => {
             // Format SSN as user types (XXX-XX-XXXX)
             let value = e.target.value.replace(/\D/g, '');
             if (value.length > 0) {
-              if (value.length <= 3) {
-                value = value;
-              } else if (value.length <= 5) {
+              if (value.length > 3 && value.length <= 5) {
                 value = value.slice(0, 3) + '-' + value.slice(3);
-              } else {
+              } else if (value.length > 5) {
                 value = value.slice(0, 3) + '-' + value.slice(3, 5) + '-' + value.slice(5, 9);
               }
             }

@@ -1,6 +1,54 @@
-version: '3.9'
-
 services:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: uber_simulation
+      MYSQL_USER: uber_app
+      MYSQL_PASSWORD: uber_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-uuber_app",
+          "-puber_password",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+      - ./infra/mongo/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.2.1
     environment:
@@ -25,40 +73,125 @@ services:
     ports:
       - "4001:4001"
     env_file:
-      - ./services/rides/.env
+      - path: ./services/rides/.env
+        required: false
+    environment:
+      MATCHING_SERVICE_URL: http://matching-service:4010
+      MONGO_URI: mongodb://mongo:27017/uber_simulation
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      ML_SERVICE_URL: http://ml-service:8000
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uber_simulation
+      MYSQL_USER: uber_app
+      MYSQL_PASSWORD: uber_password
+      MYSQL_REQUIRED: "true"
+    depends_on:
+      matching-service:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      drivers-service:
+        condition: service_started
+      ml-service:
+        condition: service_started
 
   drivers-service:
     build: ./services/drivers
     ports:
       - "4002:4002"
     env_file:
-      - ./services/drivers/.env
+      - path: ./services/drivers/.env
+        required: false
+    environment:
+      MONGO_URI: mongodb://mongo:27017/uber_simulation
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   customers-service:
     build: ./services/customers
     ports:
       - "4003:4003"
     env_file:
-      - ./services/customers/.env
+      - path: ./services/customers/.env
+        required: false
+    environment:
+      MONGO_URI: mongodb://mongo:27017/uber_simulation
+    depends_on:
+      mongo:
+        condition: service_healthy
 
   billing-service:
     build: ./services/billing
     ports:
       - "4004:4004"
     env_file:
-      - ./services/billing/.env
+      - path: ./services/billing/.env
+        required: false
+    environment:
+      MONGO_URI: mongodb://mongo:27017/uber_simulation
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uber_simulation
+      MYSQL_USER: uber_app
+      MYSQL_PASSWORD: uber_password
+      MYSQL_REQUIRED: "true"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
 
   admin-service:
     build: ./services/admin
     ports:
       - "4005:4005"
     env_file:
-      - ./services/admin/.env
+      - path: ./services/admin/.env
+        required: false
+    environment:
+      MONGO_URI: mongodb://mongo:27017/uber_simulation
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongo:
+        condition: service_healthy
 
   ml-service:
     build: ./services/dynamic_pricing_model
     ports:
       - "8000:8000"
+
+  matching-service:
+    build: ./services/matching-go
+    ports:
+      - "4010:4010"
+    environment:
+      MATCHING_PORT: 4010
+      DRIVER_SERVICE_URL: http://drivers-service:4002
+      REDIS_ADDR: redis:6379
+      RESERVATION_TTL_SECONDS: 120
+    depends_on:
+      redis:
+        condition: service_healthy
+      drivers-service:
+        condition: service_started
 
   frontend-service:
     build: ./uber-frontend
@@ -71,3 +204,7 @@ services:
       - billing-service
       - admin-service
       - ml-service
+
+volumes:
+  mysql-data:
+  mongo-data:

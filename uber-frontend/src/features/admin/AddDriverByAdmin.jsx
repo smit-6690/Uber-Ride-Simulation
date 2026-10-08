@@ -111,11 +111,9 @@ const AddDriverByAdmin = () => {
           onChange={(e) => {
             let value = e.target.value.replace(/\D/g, '');
             if (value.length > 0) {
-              if (value.length <= 3) {
-                value = value;
-              } else if (value.length <= 5) {
+              if (value.length > 3 && value.length <= 5) {
                 value = value.slice(0, 3) + '-' + value.slice(3);
-              } else {
+              } else if (value.length > 5) {
                 value = value.slice(0, 3) + '-' + value.slice(3, 5) + '-' + value.slice(5, 9);
               }
             }
@@ -545,6 +543,7 @@ const AddDriverByAdmin = () => {
                   style={{ height: '0.5rem' }}
                 />
                 <Form onSubmit={handleSubmit} className="needs-validation">
+                  {error && <div className="status-message status-error mb-3">{error}</div>}
                   {step === 1 && renderStep1()}
                   {step === 2 && renderStep2()}
                   {step === 3 && renderStep3()}
